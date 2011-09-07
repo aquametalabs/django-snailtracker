@@ -1,0 +1,15 @@
+{% extends "snailtracker/snailtracker_base.html" %}
+
+{% load friendly_tags %}
+{% block content %}{{block.super}}
+<div class="hive_box">
+	<div class="tab_header">
+		All Snailtracked Tables
+	</div>
+	<div class="st_tables">
+	{% for table in tables %}
+	<p><a href="{% url snailtracker_table_index table %}">{{table.name}}</a></p>
+	{% endfor %}
+	</div>
+</div>
+{% endblock %}
