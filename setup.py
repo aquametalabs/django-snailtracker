@@ -1,19 +1,20 @@
 from setuptools import setup, find_packages
 import sys, os
 
-version = '0.1'
+version = __import__('django_snailtracker').__version__
+
 
 setup(name='django-snailtracker',
       version=version,
       description="Track history on django models",
       long_description="""\
 """,
-      classifiers=[], # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
+      classifiers=[],  # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
       keywords='django model-history-tracking',
       author='Kyle Terry',
       author_email='kyle@kyleterry.com',
       url='',
-      license='',
+      license='New BSD License',
       packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
       include_package_data=True,
       zip_safe=False,

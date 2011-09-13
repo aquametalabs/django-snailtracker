@@ -5,7 +5,7 @@ from snailtracker.models import Snailtrack, Action, Table, ActionType
 
 def index(request):
     tables = Table.objects.all()
-    return {'tables': st.get_tables()}
+    return {'tables': tables}
 
 def table_index(request, table):
     st = Snailtrack(client=redis_factory())

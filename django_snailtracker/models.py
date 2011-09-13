@@ -1,10 +1,7 @@
 import logging
 from datetime import datetime
-try:
-    import json
-except:
-    from django.utils import simplejson as json
 
+from django.utils import simplejson as json
 from django.db import models
 from django.core import serializers
 from django.conf import settings
@@ -49,13 +46,25 @@ class Snailtrack(models.Model):
 
     @property
     def actions(self):
+        """ Return all the actions that have happened on this snailtrack.
+        """
         return self.action_set.all()
 
+    @property
+    def history(self):
+        """ Alias of self.actions
+        """
+        return self.actions
+
+    @property
     def story(self):
+        """ Attempt to tell the story of the objects history.
+        Stories are only logged if the `snailtracker_story` method exists on the model.
+        """
         story = []
-        story.extend(action.story for action in self.actions)
+        story.extend(action.story for action in self.actions if action.story is not None)
         for child in self.children.all():
-            story.extend(action.story for action in self.actions)
+            story.extend(action.story for action in self.actions if action.story is not None)
         return story
 
     def joined_story(self, placeholder=' '):
@@ -139,7 +148,13 @@ class Logger(object):
     class MyDjangoModel(django.db.models.Model, snailtracker.models.Logger):
         ...
     """
-    pass
+
+    @property
+    def snailtrack(self):
+        try:
+            return Snailtrack.objects.get(table__name=self._meta.db_table, changed_record_id=self.id)
+        except Snailtrack.DoesNotExist:
+            return None
 
 
 def create_snailtrack(instance, deleted=False):

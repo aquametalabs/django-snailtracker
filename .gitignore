@@ -1,4 +1,7 @@
 *.egg-info
-build/*
-dist/*
+build
+dist
+_build
+_static
+_templates
 *.pyc
