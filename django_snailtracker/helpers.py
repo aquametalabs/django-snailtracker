@@ -9,7 +9,7 @@ from django.core import serializers
 def make_model_snapshot(instance):
     object_as_dict = json.loads(
             serializers.serialize(
-                'json', [instance], use_natural_keys=True))[0]
+                'json', [instance], use_natural_keys=False))[0]
     if hasattr(instance, 'snailtracker_exclude_fields'):
         for field in instance.snailtracker_exclude_fields:
             try:
