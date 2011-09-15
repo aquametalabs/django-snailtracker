@@ -3,7 +3,6 @@ from datetime import datetime
 
 from django.utils import simplejson as json
 from django.db import models
-from django.core import serializers
 from django.conf import settings
 celery_enabled = False
 if getattr(settings, 'SNAILTRACKER_OFFLOAD', False):
@@ -18,16 +17,18 @@ if getattr(settings, 'SNAILTRACKER_USERNAME_FACTORY', False):
         module = __import__(module, globals(), locals(), (function))
         username_factory = getattr(module, function)
     except ImportError:
-        raise Exception('%s module not found and cannot be used as the username_factory' %
+        raise Exception('%s module not found and cannot be used as \
+                the username_factory' %
                 settings.SNAILTRACKER_USERNAME_FACTORY)
 else:
     def username_factory():
         return None
 from django.core.mail import send_mail
 
-import django_snailtracker
-from django_snailtracker.exceptions import SnailtrackerError, ParentNotFoundError
-from django_snailtracker.helpers import make_model_snapshot, dict_diff
+from django_snailtracker import snailtracker_enabled
+from django_snailtracker.exceptions import ParentNotFoundError
+from django_snailtracker.helpers import (make_model_snapshot, dict_diff,
+        diff_from_action)
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,8 @@ class Snailtrack(models.Model):
     changed_record_id = models.IntegerField()
 
     def __unicode__(self):
-        return '%s #%i: %s' % (self.table.name, self.id, self.changed_record_id)
+        return '%s #%i: %s' % (
+                self.table.name, self.id, self.changed_record_id)
 
     @property
     def actions(self):
@@ -59,12 +61,16 @@ class Snailtrack(models.Model):
     @property
     def story(self):
         """ Attempt to tell the story of the objects history.
-        Stories are only logged if the `snailtracker_story` method exists on the model.
+
+        Stories are only logged if the `snailtracker_story`
+        method exists on the model.
         """
         story = []
-        story.extend(action.story for action in self.actions if action.story is not None)
+        story.extend(action.story for action in self.actions
+                if action.story is not None)
         for child in self.children.all():
-            story.extend(action.story for action in self.actions if action.story is not None)
+            story.extend(action.story for action in self.actions
+                    if action.story is not None)
         return story
 
     def joined_story(self, placeholder=' '):
@@ -112,6 +118,56 @@ class Action(models.Model):
     def is_(self, type):
         return self.action_type.name == type
 
+    def save_snapshot_to_python(self):
+        """
+        Takes a json string of the fields as they were when the model was
+        saved and converts it to a python dictionary.
+
+        In [5]: action.save_snapshot_to_python()
+        Out[5]:
+        {u'fields': {u'not_so_awesome_field': True,
+                    u'content': 'this is content again',
+                    u'awesome_field': True},
+        u'model': u'my_app.my_model',
+        u'pk': 2}
+
+        """
+        return json.loads(self.post_save_snapshot)
+
+    def init_snapshot_to_python(self):
+        """
+        Takes a json string of the fields as they were when the model was
+        instantiated and converts it to a python dictionary.
+
+        In [5]: action.init_snapshot_to_python()
+        Out[5]:
+        {u'fields': {u'not_so_awesome_field': False,
+                    u'content': 'this is content',
+                    u'awesome_field': True},
+        u'model': u'my_app.my_model',
+        u'pk': 2}
+
+        """
+        return json.loads(self.post_init_snapshot)
+
+    def get_diff(self, values=False):
+        """
+        Returns the diff of an updated object
+
+        In [4]: action.get_diff()
+        Out[4]:
+        [u'not_so_awesome_field',
+        u'content']
+
+        In [5]: action.get_diff(values=True)
+        Out[5]:
+        {u'not_so_awesome_field': {'new': True, 'old': False},
+        u'content': {'new': u'this is content again',
+                     'old': u'this is content'}}
+        """
+        if self.is_update:
+            return diff_from_action(self, values=values)
+
 
 class Table(models.Model):
 
@@ -152,14 +208,16 @@ class Logger(object):
     @property
     def snailtrack(self):
         try:
-            return Snailtrack.objects.get(table__name=self._meta.db_table, changed_record_id=self.id)
+            return Snailtrack.objects.get(
+                    table__name=self._meta.db_table, changed_record_id=self.id)
         except Snailtrack.DoesNotExist:
             return None
 
 
 def create_snailtrack(instance, deleted=False):
     try:
-        snailtrack = Snailtrack.objects.get(table__name=instance._meta.db_table,
+        snailtrack = Snailtrack.objects.get(
+                table__name=instance._meta.db_table,
                 changed_record_id=instance.id)
     except Snailtrack.DoesNotExist:
         snailtrack = Snailtrack()
@@ -176,15 +234,16 @@ def create_snailtrack(instance, deleted=False):
 
 def create_snailtrack_parents(instance, snailtrack):
     """
-    Recursive function to create a chain of snaitrack objects. This will look for
-    the snailtracker_child_of attribute on a model instance and create a
-    snailtrack record of it's parent.
+    Recursive function to create a chain of snaitrack objects.
+    This will look for the snailtracker_child_of attribute on
+    a model instance and create a snailtrack record of it's parent.
     """
     if hasattr(instance, 'snailtracker_child_of'):
         try:
             parent_instance = getattr(instance, instance.snailtracker_child_of)
         except AttributeError:
-            raise ParentNotFoundError(type(instance), instance.snailtracker_child_of)
+            raise ParentNotFoundError(
+                    type(instance), instance.snailtracker_child_of)
         try:
             parent_snailtrack = Snailtrack.objects.get(
                     table__name=parent_instance._meta.db_table,
@@ -249,11 +308,11 @@ if celery_enabled:
 
 def snailtracker_post_init_hook(sender, instance, **kwargs):
     """
-    If connected to the Django model's post_init signal, this will fire and make
-    a snapshot of the instance's current state (field values).
+    If connected to the Django model's post_init signal, this will
+    fire and make a snapshot of the instance's current state (field values).
     """
 #:TODO: WTF? Re-fucking-factor this...
-    if not issubclass(sender, Logger) or not django_snailtracker.snailtracker_enabled():
+    if not issubclass(sender, Logger) or not snailtracker_enabled():
         return
     try:
         instance.snailtracker_new = False
@@ -263,7 +322,12 @@ def snailtracker_post_init_hook(sender, instance, **kwargs):
     except Exception, e:
         try:
             import traceback
-            send_mail('Snailtracker Error!', traceback.format_exc(), 'snailtrackererror@example.com', ('kyle@example.com'))
+#:TODO: this...
+            send_mail(
+                    'Snailtracker Error!',
+                    traceback.format_exc(),
+                    'snailtrackererror@example.com',
+                    ('kyle@example.com'))
             return
         except:
             return
@@ -271,11 +335,11 @@ def snailtracker_post_init_hook(sender, instance, **kwargs):
 
 def snailtracker_post_save_hook(sender, instance, **kwargs):
     """
-    If connected to the Django model's post_save signal, this will fire and make
-    a snapshot of the instance's current state (field values) then
+    If connected to the Django model's post_save signal, this will fire
+    and make a snapshot of the instance's current state (field values) then
     save a snailtrack (if it doesn't exist) and an action.
     """
-    if not issubclass(sender, Logger) or not django_snailtracker.snailtracker_enabled():
+    if not issubclass(sender, Logger) or not snailtracker_enabled():
         return
     try:
         instance.post_save_snapshot = make_model_snapshot(instance)
@@ -288,7 +352,11 @@ def snailtracker_post_save_hook(sender, instance, **kwargs):
     except Exception, e:
         try:
             import traceback
-            send_mail('Snailtracker Error!', traceback.format_exc(), 'snailtrackererror@aquameta.com', ('kyle@aquameta.com'))
+#:TODO: this...
+            send_mail(
+                    'Snailtracker Error!',
+                    traceback.format_exc(),
+                    'snailtrackererror@example.com', ('kyle@example.com'))
             return
         except:
             return
@@ -296,10 +364,10 @@ def snailtracker_post_save_hook(sender, instance, **kwargs):
 
 def snailtracker_post_delete_hook(sender, instance, **kwargs):
     """
-    If connected to the Django model's post_delete signal, this will fire and make
-    save a snailtrack (if it doesn't exist) and a delete action.
+    If connected to the Django model's post_delete signal, this will
+    fire and make save a snailtrack (if it doesn't exist) and a delete action.
     """
-    if not issubclass(sender, Logger) or not django_snailtracker.snailtracker_enabled():
+    if not issubclass(sender, Logger) or not snailtracker_enabled():
         return
     try:
         if celery_enabled:
@@ -309,7 +377,11 @@ def snailtracker_post_delete_hook(sender, instance, **kwargs):
     except Exception, e:
         try:
             import traceback
-            send_mail('Snailtracker Error!', traceback.format_exc(), 'snailtrackererror@aquameta.com', ('kyle@aquameta.com'))
+            send_mail(
+                    'Snailtracker Error!',
+                    traceback.format_exc(),
+                    'snailtrackererror@example.com',
+                    ('kyle@example.com'))
             return
         except:
             return
