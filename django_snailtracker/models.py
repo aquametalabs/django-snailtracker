@@ -247,7 +247,7 @@ def create_snailtrack_parents(instance, snailtrack):
         try:
             parent_snailtrack = Snailtrack.objects.get(
                     table__name=parent_instance._meta.db_table,
-                    changed_record_id=parent_instance.id).select_related()
+                    changed_record_id=parent_instance.id)
         except Snailtrack.DoesNotExist:
             parent_snailtrack = Snailtrack()
             parent_snailtrack.table = Table.objects.get_or_create(
