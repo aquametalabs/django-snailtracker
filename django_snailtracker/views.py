@@ -1,7 +1,7 @@
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
 import django.views.decorators.cache as cache
 
-from snailtracker.models import Snailtrack, Action, Table, ActionType
+from django_snailtracker.models import Snailtrack, Action, Table, ActionType
 
 def index(request):
     tables = Table.objects.all()

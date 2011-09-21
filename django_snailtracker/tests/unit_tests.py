@@ -1,7 +1,7 @@
 from django.utils import unittest
 from django.db import models
 
-from snailtracker.models import Snailtrack, Action, ActionType, Table, Logger
+from django_snailtracker.models import Snailtrack, Action, ActionType, Table, Logger
 
 
 class MockTag(models.Model, Logger):
