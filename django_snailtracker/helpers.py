@@ -3,12 +3,16 @@ try:
 except:
     from django.utils import simplejson as json
 from django.core import serializers
-
+from django.conf import settings
+if not hasattr(settings, 'SERIALIZATION_MODULES'):
+    settings.SERIALIZATION_MODULES = {}
+if 'django_snailtracker.serializer' not in settings.SERIALIZATION_MODULES:
+    settings.SERIALIZATION_MODULES['django_snailtracker.serializer'] = 'django_snailtracker.serializer'
 
 def make_model_snapshot(instance):
     object_as_dict = json.loads(
             serializers.serialize(
-                'json', [instance], use_natural_keys=False))[0]
+                'django_snailtracker.serializer', [instance]))[0]
     if hasattr(instance, 'snailtracker_exclude_fields'):
         for field in instance.snailtracker_exclude_fields:
             try:
