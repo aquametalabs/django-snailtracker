@@ -28,7 +28,7 @@ from django.core.mail import send_mail
 from django_snailtracker import snailtracker_enabled
 from django_snailtracker.exceptions import ParentNotFoundError
 from django_snailtracker.helpers import (make_model_snapshot, dict_diff,
-        diff_from_action)
+        diff_from_action, mutex_lock, SnailtrackerMutexLockedError)
 
 
 logger = logging.getLogger(__name__)
@@ -216,20 +216,24 @@ class Logger(object):
 
 def create_snailtrack(instance, deleted=False):
     try:
-        snailtrack = Snailtrack.objects.get(
-                table__name=instance._meta.db_table,
-                changed_record_id=instance.id)
-    except Snailtrack.DoesNotExist:
-        snailtrack = Snailtrack()
-        snailtrack.table = Table.objects.get_or_create(
-                name=instance._meta.db_table,
-                app_name=instance._meta.app_label)[0]
-        snailtrack.changed_record_id = instance.id
-        create_snailtrack_parents(instance, snailtrack)
-        snailtrack.save()
-        logger.info('Created Snailtrack(%i) object for table %s' % (
-            snailtrack.id, snailtrack.table.name))
-    create_action(instance=instance, snailtrack=snailtrack, deleted=deleted)
+        with mutex_lock('%s.%d' % (instance._meta.db_table, instance.id)):
+            try:
+                snailtrack = Snailtrack.objects.get(
+                        table__name=instance._meta.db_table,
+                        changed_record_id=instance.id)
+            except Snailtrack.DoesNotExist:
+                snailtrack = Snailtrack()
+                snailtrack.table = Table.objects.get_or_create(
+                        name=instance._meta.db_table,
+                        app_name=instance._meta.app_label)[0]
+                snailtrack.changed_record_id = instance.id
+                create_snailtrack_parents(instance, snailtrack)
+                snailtrack.save()
+                logger.info('Created Snailtrack(%i) object for table %s' % (
+                    snailtrack.id, snailtrack.table.name))
+            create_action(instance=instance, snailtrack=snailtrack, deleted=deleted)
+    except SnailtrackerMutexLockedError:
+        create_snailtrack(instance=instance, deleted=deleted)
 
 
 def create_snailtrack_parents(instance, snailtrack):
@@ -245,18 +249,22 @@ def create_snailtrack_parents(instance, snailtrack):
             raise ParentNotFoundError(
                     type(instance), instance.snailtracker_child_of)
         try:
-            parent_snailtrack = Snailtrack.objects.get(
-                    table__name=parent_instance._meta.db_table,
-                    changed_record_id=parent_instance.id)
-        except Snailtrack.DoesNotExist:
-            parent_snailtrack = Snailtrack()
-            parent_snailtrack.table = Table.objects.get_or_create(
-                    name=parent_instance._meta.db_table,
-                    app_name=instance._meta.app_label)[0]
-            parent_snailtrack.changed_record_id = parent_instance.id
-            parent_snailtrack.save()
-        snailtrack.parent = parent_snailtrack
-        create_snailtrack_parents(parent_instance, parent_snailtrack)
+            with mutex_lock('%s.%d' % (instance._meta.db_table, instance.id)):
+                try:
+                    parent_snailtrack = Snailtrack.objects.get(
+                            table__name=parent_instance._meta.db_table,
+                            changed_record_id=parent_instance.id)
+                except Snailtrack.DoesNotExist:
+                    parent_snailtrack = Snailtrack()
+                    parent_snailtrack.table = Table.objects.get_or_create(
+                            name=parent_instance._meta.db_table,
+                            app_name=instance._meta.app_label)[0]
+                    parent_snailtrack.changed_record_id = parent_instance.id
+                    parent_snailtrack.save()
+                snailtrack.parent = parent_snailtrack
+                create_snailtrack_parents(parent_instance, parent_snailtrack)
+        except SnailtrackerMutexLockedError:
+            create_snailtrack_parents(instance=instance, snailtrack=snailtrack)
     else:
         return
 
