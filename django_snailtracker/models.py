@@ -249,7 +249,7 @@ def create_snailtrack_parents(instance, snailtrack):
             raise ParentNotFoundError(
                     type(instance), instance.snailtracker_child_of)
         try:
-            with mutex_lock('%s.%d' % (instance._meta.db_table, instance.id)):
+            with mutex_lock('%s.%d' % (parent_instance._meta.db_table, parent_instance.id)):
                 try:
                     parent_snailtrack = Snailtrack.objects.get(
                             table__name=parent_instance._meta.db_table,
@@ -262,9 +262,9 @@ def create_snailtrack_parents(instance, snailtrack):
                     parent_snailtrack.changed_record_id = parent_instance.id
                     parent_snailtrack.save()
                 snailtrack.parent = parent_snailtrack
-                create_snailtrack_parents(parent_instance, parent_snailtrack)
         except SnailtrackerMutexLockedError:
             create_snailtrack_parents(instance=instance, snailtrack=snailtrack)
+        create_snailtrack_parents(parent_instance, parent_snailtrack)
     else:
         return
 
