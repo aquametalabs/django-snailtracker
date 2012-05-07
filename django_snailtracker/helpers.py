@@ -1,3 +1,4 @@
+import os
 from contextlib import contextmanager
 
 try:
@@ -5,14 +6,16 @@ try:
 except:
     from django.utils import simplejson as json
 
-import redis
-
+import django
 from django.core import serializers
 from django.conf import settings
 if not hasattr(settings, 'SERIALIZATION_MODULES'):
     settings.SERIALIZATION_MODULES = {}
 if 'django_snailtracker.serializer' not in settings.SERIALIZATION_MODULES:
     settings.SERIALIZATION_MODULES['django_snailtracker.serializer'] = 'django_snailtracker.serializer'
+
+SNAILTRACKER_TMP_PATH = getattr(settings, 'SNAILTRACKER_TMP_PATH', '/tmp/')
+
 
 def make_model_snapshot(instance):
     object_as_dict = json.loads(
@@ -57,16 +60,15 @@ def diff_from_action(action, values=True):
 
 @contextmanager
 def mutex_lock(key):
-    r = redis.Redis(host=getattr(settings, 'REDIS_HOST', None),
-            port=getattr(settings, 'REDIS_PORT', None),
-            db=getattr(settings, 'REDIS_DB', None))
-    mutex_key = 'snailtracker.%s.lock' % key
-    if not r.setnx(mutex_key, True):
-        raise SnailtrackerMutexLockedError("'%s' is already locked in the mutex" % (key,))
+    mutex_key = '%ssnailtracker.%s.lock' % (SNAILTRACKER_TMP_PATH, key)
+    if os.path.exists(mutex_key):
+        raise SnailtrackerMutexLockedError("'%s' is already locked" % (key,))
+    else:
+        open(mutex_key, 'a').close()
     try:
         yield True
     finally:
-        r.delete(mutex_key)
+        os.remove(mutex_key)
 
 
 class SnailtrackerMutexLockedError(Exception):
