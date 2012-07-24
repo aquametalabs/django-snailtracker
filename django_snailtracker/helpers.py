@@ -1,12 +1,8 @@
 import os
 from contextlib import contextmanager
 
-try:
-    import json
-except:
-    from django.utils import simplejson as json
+import json
 
-import django
 from django.core import serializers
 from django.conf import settings
 if not hasattr(settings, 'SERIALIZATION_MODULES'):
@@ -15,6 +11,10 @@ if 'django_snailtracker.serializer' not in settings.SERIALIZATION_MODULES:
     settings.SERIALIZATION_MODULES['django_snailtracker.serializer'] = 'django_snailtracker.serializer'
 
 SNAILTRACKER_TMP_PATH = getattr(settings, 'SNAILTRACKER_TMP_PATH', '/tmp/')
+
+
+def snailtracker_enabled():
+    return getattr(settings, 'SNAILTRACKER_ENABLED', False)
 
 
 def make_model_snapshot(instance):

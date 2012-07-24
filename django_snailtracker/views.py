@@ -1,11 +1,9 @@
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
-import django.views.decorators.cache as cache
 
-from django_snailtracker.models import Snailtrack, Action, Table, ActionType
+from django_snailtracker.models import Snailtrack, Action
 
 def index(request):
-    tables = Table.objects.all()
-    return {'tables': tables}
+    return {}
 
 def table_index(request, table):
     st = Snailtrack(client=redis_factory())

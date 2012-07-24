@@ -4,13 +4,6 @@ from datetime import datetime
 from django.utils import simplejson as json
 from django.db import models
 from django.conf import settings
-celery_enabled = False
-if getattr(settings, 'SNAILTRACKER_OFFLOAD', False):
-    celery_enabled = True
-    try:
-        from celery.decorators import task
-    except:
-        celery_enabled = False
 if getattr(settings, 'SNAILTRACKER_USERNAME_FACTORY', False):
     try:
         module, function = settings.SNAILTRACKER_USERNAME_FACTORY.split(':')
@@ -24,11 +17,14 @@ else:
     def username_factory():
         return None
 from django.core.mail import send_mail
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes import generic
 
-from django_snailtracker import snailtracker_enabled
 from django_snailtracker.exceptions import ParentNotFoundError
 from django_snailtracker.helpers import (make_model_snapshot, dict_diff,
         diff_from_action, mutex_lock, SnailtrackerMutexLockedError)
+from django_snailtracker.constants import (ACTION_TYPE_INSERT,
+        ACTION_TYPE_UPDATE, ACTION_TYPE_DELETE, ACTION_TYPE_CHOICES)
 
 
 logger = logging.getLogger(__name__)
@@ -37,14 +33,15 @@ logger.setLevel('DEBUG')
 
 class Snailtrack(models.Model):
 
-    table = models.ForeignKey('django_snailtracker.Table')
+    content_type = models.ForeignKey(ContentType)
+    object_id = models.PositiveIntegerField()
+    content_object = generic.GenericForeignKey('content_type', 'object_id')
     parent = models.ForeignKey('self', null=True, blank=True,
             related_name='children')
-    changed_record_id = models.IntegerField()
 
     def __unicode__(self):
         return '%s #%i: %s' % (
-                self.table.name, self.id, self.changed_record_id)
+                self.content_object._meta.table, self.id, self.object_id)
 
     @property
     def actions(self):
@@ -90,7 +87,7 @@ class Snailtrack(models.Model):
 class Action(models.Model):
 
     snailtrack = models.ForeignKey('django_snailtracker.Snailtrack')
-    action_type = models.ForeignKey('django_snailtracker.ActionType')
+    action_type = models.PositiveIntegerField(choices=ACTION_TYPE_CHOICES)
     real_event_time = models.DateTimeField()
     user_name = models.CharField(max_length=255)
     columns_changed = models.TextField(null=True)
@@ -99,24 +96,24 @@ class Action(models.Model):
     story = models.TextField(null=True)
 
     def __unicode__(self):
-        return '%s #%i at %s' % (self.action_type.name, self.id,
+        return '%s #%i at %s' % (self.get_action_type_display(), self.id,
                 self.real_event_time)
 
     @property
     def is_insert(self):
-        return self.action_type.name == 'update'
+        return self.action_type == ACTION_TYPE_INSERT
 
     @property
     def is_update(self):
-        return self.action_type.name == 'update'
+        return self.action_type == ACTION_TYPE_UPDATE
 
     @property
     def is_delete(self):
-        return self.action_type.name == 'delete'
+        return self.action_type == ACTION_TYPE_DELETE
 
     @property
     def is_(self, type):
-        return self.action_type.name == type
+        return self.action_type == type
 
     def save_snapshot_to_python(self):
         """
@@ -169,24 +166,6 @@ class Action(models.Model):
             return diff_from_action(self, values=values)
 
 
-class Table(models.Model):
-
-    name = models.CharField(max_length=255, unique=True)
-    app_name = models.CharField(max_length=255, null=False)
-    tracked_by = models.ForeignKey('django_snailtracker.Table', null=True)
-
-    def __unicode__(self):
-        return '%s #%i in %s app' % (self.name, self.id, self.app_name)
-
-
-class ActionType(models.Model):
-
-    name = models.CharField(max_length=255)
-
-    def __unicode__(self):
-        return '%s' % self.name
-
-
 class Story(object):
 
     def __init__(self, insert=None, update=None, delete=None):
@@ -209,7 +188,8 @@ class Logger(object):
     def snailtrack(self):
         try:
             return Snailtrack.objects.get(
-                    table__name=self._meta.db_table, changed_record_id=self.id)
+                    table__name=self._meta.db_table,
+                    changed_record_id=self.id)
         except Snailtrack.DoesNotExist:
             return None
 
@@ -218,21 +198,21 @@ def create_snailtrack(instance, deleted=False):
     try:
         with mutex_lock('%s.%d' % (instance._meta.db_table, instance.id)):
             try:
+                instance_type = ContentType.objects.get_for_model(instance)
                 snailtrack = Snailtrack.objects.get(
-                        table__name=instance._meta.db_table,
-                        changed_record_id=instance.id)
+                        content_type__pk=instance_type.pk,
+                        object_id=instance.pk)
             except Snailtrack.DoesNotExist:
                 snailtrack = Snailtrack()
-                snailtrack.table = Table.objects.get_or_create(
-                        name=instance._meta.db_table,
-                        app_name=instance._meta.app_label)[0]
-                snailtrack.changed_record_id = instance.id
+                snailtrack.content_object = instance
                 create_snailtrack_parents(instance, snailtrack)
                 snailtrack.save()
                 logger.info('Created Snailtrack(%i) object for table %s' % (
                     snailtrack.id, snailtrack.table.name))
-            create_action(instance=instance, snailtrack=snailtrack, deleted=deleted)
+            create_action(instance=instance, snailtrack=snailtrack,
+                    deleted=deleted)
     except SnailtrackerMutexLockedError:
+        logger.debug('Attempting to access locked record. Trying again...')
         create_snailtrack(instance=instance, deleted=deleted)
 
 
@@ -251,18 +231,17 @@ def create_snailtrack_parents(instance, snailtrack):
         try:
             with mutex_lock('%s.%d' % (parent_instance._meta.db_table, parent_instance.id)):
                 try:
+                    instance_type = ContentType.objects.get_for_model(instance)
                     parent_snailtrack = Snailtrack.objects.get(
-                            table__name=parent_instance._meta.db_table,
-                            changed_record_id=parent_instance.id)
+                            content_type__pk=instance_type.pk,
+                            object_id=instance.pk)
                 except Snailtrack.DoesNotExist:
                     parent_snailtrack = Snailtrack()
-                    parent_snailtrack.table = Table.objects.get_or_create(
-                            name=parent_instance._meta.db_table,
-                            app_name=instance._meta.app_label)[0]
-                    parent_snailtrack.changed_record_id = parent_instance.id
+                    parent_snailtrack.content_object = instance
                     parent_snailtrack.save()
                 snailtrack.parent = parent_snailtrack
         except SnailtrackerMutexLockedError:
+            logger.debug('Attempting to access locked record. Trying again...')
             create_snailtrack_parents(instance=instance, snailtrack=snailtrack)
         create_snailtrack_parents(parent_instance, parent_snailtrack)
     else:
@@ -272,17 +251,17 @@ def create_snailtrack_parents(instance, snailtrack):
 def create_action(instance, snailtrack, deleted=False):
     type = None
     if deleted:
-        type = 'delete'
+        type = ACTION_TYPE_DELETE
     elif instance.snailtracker_new:
-        type = 'insert'
+        type = ACTION_TYPE_INSERT
     else:
-        type = 'update'
+        type = ACTION_TYPE_UPDATE
     action = Action()
     action.snailtrack = snailtrack
     action.real_event_time = datetime.now()
     action.user_name = username_factory() or 'anon'
     action.post_init_snapshot = json.dumps(instance.post_init_snapshot)
-    action.action_type = ActionType.objects.get_or_create(name=type)[0]
+    action.action_type = type
     if deleted:
         if hasattr(instance, 'snailtracker_story'):
             action.story = instance.snailtracker_story.delete
@@ -305,23 +284,12 @@ def create_action(instance, snailtrack, deleted=False):
         action.post_save_snapshot = json.dumps(instance.post_save_snapshot)
         action.save()
 
-if celery_enabled:
-    @task
-    def offload_wrapper(instance, deleted=False):
-        """
-        This function if a celery task
-        """
-        return create_snailtrack(instance=instance, deleted=deleted)
-
 
 def snailtracker_post_init_hook(sender, instance, **kwargs):
     """
     If connected to the Django model's post_init signal, this will
     fire and make a snapshot of the instance's current state (field values).
     """
-#:TODO: WTF? Re-fucking-factor this...
-    if not issubclass(sender, Logger) or not snailtracker_enabled():
-        return
     try:
         instance.snailtracker_new = False
         if not instance.id:
@@ -347,10 +315,10 @@ def snailtracker_post_save_hook(sender, instance, **kwargs):
     and make a snapshot of the instance's current state (field values) then
     save a snailtrack (if it doesn't exist) and an action.
     """
-    if not issubclass(sender, Logger) or not snailtracker_enabled():
-        return
     try:
         instance.post_save_snapshot = make_model_snapshot(instance)
+        # prevent circular imports
+        from django_snailtracker.tasks import offload_wrapper, celery_enabled
         if celery_enabled:
             offload_wrapper.delay(instance)
             logger.info('%s model instanced saved. '
@@ -375,9 +343,9 @@ def snailtracker_post_delete_hook(sender, instance, **kwargs):
     If connected to the Django model's post_delete signal, this will
     fire and make save a snailtrack (if it doesn't exist) and a delete action.
     """
-    if not issubclass(sender, Logger) or not snailtracker_enabled():
-        return
     try:
+        # prevent circular imports
+        from django_snailtracker.tasks import offload_wrapper, celery_enabled
         if celery_enabled:
             offload_wrapper.delay(instance, deleted=True)
         else:
