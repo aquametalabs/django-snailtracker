@@ -4,7 +4,7 @@ if getattr(settings, 'SNAILTRACKER_OFFLOAD', False):
     try:
         from celery.task import task
         celery_enabled = True
-    except:
+    except ImportError:
         celery_enabled = False
 
 from django_snailtracker.models import create_snailtrack
