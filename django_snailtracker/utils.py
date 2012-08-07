@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 def register(obj_def):
-    if not snailtracker_site.registry.get(obj_def._meta.db_table):
+    if obj_def._meta.db_table not in snailtracker_site.registry:
         logger.debug('Registering %s' % obj_def._meta.db_table)
-        post_init.connect(obj_def, snailtracker_post_init_hook)
-        post_save.connect(obj_def, snailtracker_post_save_hook)
-        post_delete.connect(obj_def, snailtracker_post_delete_hook)
+        post_init.connect(snailtracker_post_init_hook, sender=obj_def,)
+        post_save.connect(snailtracker_post_save_hook, sender=obj_def,)
+        post_delete.connect(snailtracker_post_delete_hook, sender=obj_def,)
         snailtracker_site.registry[obj_def._meta.db_table] = True
     else:
         logger.debug('%s already registered' % obj_def._meta.db_table)
