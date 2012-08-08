@@ -6,7 +6,7 @@ Replace this with more appropriate tests for your application.
 """
 
 from django.test import TestCase
-from django_snailtracker.models import Snailtrack
+from django_snailtracker.models import Snailtrack, Action
 from fake.models import MockModel
 from nose.tools import assert_equal
 import django_snailtracker
@@ -19,5 +19,7 @@ class SnailtrackTest(TestCase):
 
     def test_saving_makes_a_snailtrack(self):
         track_count_before = Snailtrack.objects.count()
+        action_count_before = Action.objects.count()
         mm = MockModel.objects.create(name='test')
         assert_equal(Snailtrack.objects.count(), track_count_before + 1)
+        assert_equal(Action.objects.count(), action_count_before + 1)

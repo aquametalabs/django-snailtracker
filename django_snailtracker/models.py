@@ -222,31 +222,22 @@ def get_or_create_snailtrack(instance, deleted=False, do_create_action=True):
 
 
 def create_action(instance, snailtrack, deleted=False):
-    type = None
+    action = Action(snailtrack=snailtrack, real_event_time=datetime.now(),
+                    user_name=username_factory() or 'anon',
+                    post_init_snapshot=json.dumps(instance.post_init_snapshot))
     if deleted:
-        type = ACTION_TYPE_DELETE
-    elif instance.snailtracker_new:
-        type = ACTION_TYPE_INSERT
-    else:
-        type = ACTION_TYPE_UPDATE
-    action = Action()
-    action.snailtrack = snailtrack
-    action.real_event_time = datetime.now()
-    action.user_name = username_factory() or 'anon'
-    action.post_init_snapshot = json.dumps(instance.post_init_snapshot)
-    action.action_type = type
-    if deleted:
+        action.action_type = ACTION_TYPE_DELETE
         if hasattr(instance, 'snailtracker_story'):
             action.story = instance.snailtracker_story.delete
         action.save()
-        return
-    if type == 'insert':
+    elif instance.snailtracker_new:
+        action.action_type = ACTION_TYPE_INSERT
         if hasattr(instance, 'snailtracker_story'):
             action.story = instance.snailtracker_story.insert
         action.post_save_snapshot = json.dumps(instance.post_save_snapshot)
         action.save()
-        return
-    if type == 'update':
+    else:
+        action.action_type = ACTION_TYPE_UPDATE
         if hasattr(instance, 'snailtracker_story'):
             action.story = instance.snailtracker_story.update
         column_diff = dict_diff(instance.post_init_snapshot['fields'],
