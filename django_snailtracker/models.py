@@ -289,6 +289,7 @@ def snailtracker_post_save_hook(sender, instance, **kwargs):
                     'Offloaded snailtracker task to Celery.' % instance)
         else:
             get_or_create_snailtrack(instance)
+        instance.snailtracker_new = False
     except Exception, e:
         try:
             import traceback
