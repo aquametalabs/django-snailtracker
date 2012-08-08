@@ -41,7 +41,7 @@ class Snailtrack(models.Model):
 
     def __unicode__(self):
         return '%s #%i: %s' % (
-                self.content_object._meta.db_table, self.id, self.object_id)
+                self.content_object._meta.db_table, self.id or 0, self.object_id)
 
     @property
     def actions(self):
@@ -96,7 +96,7 @@ class Action(models.Model):
     story = models.TextField(null=True)
 
     def __unicode__(self):
-        return '%s #%i at %s' % (self.get_action_type_display(), self.id,
+        return '%s #%i at %s' % (self.get_action_type_display(), self.id or 0,
                 self.real_event_time)
 
     @property

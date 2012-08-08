@@ -12,7 +12,7 @@ class MockModel(models.Model, Logger):
     name = models.CharField(max_length=6)
     tags = models.ManyToManyField(MockTag)
     ignored = models.CharField(max_length=6, null=True)
-    snailtracker_exclude_fields = ('ignored')
+    snailtracker_exclude_fields = ('ignored',)
 
 
 class ChildMockModel(models.Model, Logger):

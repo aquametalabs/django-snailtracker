@@ -36,3 +36,13 @@ class SnailtrackTest(TestCase):
         c_track = Snailtrack.objects.get(object_id=cmm.pk, content_type=child_content_type)
         assert_equal(c_track.parent.content_object, mm)
         assert_equal(mm_actions.count(), action_count_before)
+
+    def test_snailtrack_ignores_changes_to_excluded_fields(self):
+        mm = MockModel.objects.create(name='test')
+        mm_content_type = ContentType.objects.get_for_model(MockModel)
+        mm_actions = Action.objects.filter(snailtrack__object_id=mm.pk, snailtrack__content_type=mm_content_type)
+        action_count_before = mm_actions.count()
+
+        mm.ignored = 'hahahah'
+        mm.save()
+        assert_equal(mm_actions.count(), action_count_before)
