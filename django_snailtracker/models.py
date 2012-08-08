@@ -41,7 +41,7 @@ class Snailtrack(models.Model):
 
     def __unicode__(self):
         return '%s #%i: %s' % (
-                self.content_object._meta.table, self.id, self.object_id)
+                self.content_object._meta.db_table, self.id, self.object_id)
 
     @property
     def actions(self):
