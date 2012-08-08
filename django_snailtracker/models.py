@@ -194,58 +194,31 @@ class Logger(object):
             return None
 
 
-def create_snailtrack(instance, deleted=False):
+def get_or_create_snailtrack(instance, deleted=False, do_create_action=True):
     try:
         with mutex_lock('%s.%d' % (instance._meta.db_table, instance.id)):
-            try:
-                instance_type = ContentType.objects.get_for_model(instance)
-                snailtrack = Snailtrack.objects.get(
-                        content_type__pk=instance_type.pk,
-                        object_id=instance.pk)
-            except Snailtrack.DoesNotExist:
-                snailtrack = Snailtrack()
-                snailtrack.content_object = instance
-                create_snailtrack_parents(instance, snailtrack)
-                snailtrack.save()
-                logger.info('Created Snailtrack(%i) object for table %s' % (
-                    snailtrack.id, snailtrack.table.name))
-            create_action(instance=instance, snailtrack=snailtrack,
-                    deleted=deleted)
+            parent = None
+            if hasattr(instance, 'snailtracker_child_of'):
+                parent, created = get_or_create_snailtrack(
+                    getattr(instance, instance.snailtracker_child_of),
+                    do_create_action=False)
+
+            instance_type = ContentType.objects.get_for_model(instance)
+            snailtrack, created = Snailtrack.objects.get_or_create(
+                object_id=instance.pk, content_type=instance_type, parent=parent)
+
+            logger.debug('%s Snailtrack(%i) object for table %s' % (
+                    ('Created' if created else 'Found'),
+                    snailtrack.id, snailtrack.content_object._meta.db_table))
+
+            if do_create_action:
+                create_action(instance=instance, snailtrack=snailtrack,
+                              deleted=deleted)
+            return snailtrack, created
     except SnailtrackerMutexLockedError:
         logger.debug('Attempting to access locked record. Trying again...')
-        create_snailtrack(instance=instance, deleted=deleted)
-
-
-def create_snailtrack_parents(instance, snailtrack):
-    """
-    Recursive function to create a chain of snaitrack objects.
-    This will look for the snailtracker_child_of attribute on
-    a model instance and create a snailtrack record of it's parent.
-    """
-    if hasattr(instance, 'snailtracker_child_of'):
-        try:
-            parent_instance = getattr(instance, instance.snailtracker_child_of)
-        except AttributeError:
-            raise ParentNotFoundError(
-                    type(instance), instance.snailtracker_child_of)
-        try:
-            with mutex_lock('%s.%d' % (parent_instance._meta.db_table, parent_instance.id)):
-                try:
-                    instance_type = ContentType.objects.get_for_model(instance)
-                    parent_snailtrack = Snailtrack.objects.get(
-                            content_type__pk=instance_type.pk,
-                            object_id=instance.pk)
-                except Snailtrack.DoesNotExist:
-                    parent_snailtrack = Snailtrack()
-                    parent_snailtrack.content_object = instance
-                    parent_snailtrack.save()
-                snailtrack.parent = parent_snailtrack
-        except SnailtrackerMutexLockedError:
-            logger.debug('Attempting to access locked record. Trying again...')
-            create_snailtrack_parents(instance=instance, snailtrack=snailtrack)
-        create_snailtrack_parents(parent_instance, parent_snailtrack)
-    else:
-        return
+        get_or_create_snailtrack(instance=instance, deleted=deleted,
+                                 do_create_action=do_create_action)
 
 
 def create_action(instance, snailtrack, deleted=False):
@@ -324,7 +297,7 @@ def snailtracker_post_save_hook(sender, instance, **kwargs):
             logger.info('%s model instanced saved. '
                     'Offloaded snailtracker task to Celery.' % instance)
         else:
-            create_snailtrack(instance)
+            get_or_create_snailtrack(instance)
     except Exception, e:
         try:
             import traceback
@@ -349,7 +322,7 @@ def snailtracker_post_delete_hook(sender, instance, **kwargs):
         if celery_enabled:
             offload_wrapper.delay(instance, deleted=True)
         else:
-            create_snailtrack(instance, deleted=True)
+            get_or_create_snailtrack(instance, deleted=True)
     except Exception, e:
         try:
             import traceback

@@ -7,7 +7,7 @@ if getattr(settings, 'SNAILTRACKER_OFFLOAD', False):
     except ImportError:
         celery_enabled = False
 
-from django_snailtracker.models import create_snailtrack
+from django_snailtracker.models import get_or_create_snailtrack
 
 
 if celery_enabled:
@@ -16,6 +16,6 @@ if celery_enabled:
         """
         This function if a celery task
         """
-        return create_snailtrack(instance=instance, deleted=deleted)
+        get_or_create_snailtrack(instance=instance, deleted=deleted)
 else:
     offload_wrapper = None
