@@ -1,7 +1,8 @@
-import os
 from contextlib import contextmanager
-
+from datetime import datetime
+from time import time
 import json
+import os
 
 from django.core import serializers
 from django.conf import settings
@@ -11,6 +12,7 @@ if 'django_snailtracker.serializer' not in settings.SERIALIZATION_MODULES:
     settings.SERIALIZATION_MODULES['django_snailtracker.serializer'] = 'django_snailtracker.serializer'
 
 SNAILTRACKER_TMP_PATH = getattr(settings, 'SNAILTRACKER_TMP_PATH', '/tmp/')
+SNAILTRACKER_TIMEOUT_SECONDS = getattr(settings, 'SNAILTRACKER_TIMEOUT_SECONDS', 5)
 
 
 def snailtracker_enabled():
@@ -62,9 +64,14 @@ def diff_from_action(action, values=True):
 def mutex_lock(key):
     mutex_key = '%ssnailtracker.%s.lock' % (SNAILTRACKER_TMP_PATH, key)
     if os.path.exists(mutex_key):
-        raise SnailtrackerMutexLockedError("'%s' is already locked" % (key,))
-    else:
-        open(mutex_key, 'a').close()
+        with open(mutex_key, 'r') as tmp_f:
+            file_data = tmp_f.read()
+            if file_data:
+                was_made = datetime.fromtimestamp(float(file_data))
+                if (datetime.now() - was_made).seconds < SNAILTRACKER_TIMEOUT_SECONDS:
+                    raise SnailtrackerMutexLockedError("'%s' is already locked" % (key,))
+    with open(mutex_key, 'w') as tmp_f:
+        tmp_f.write(unicode(time()))
     try:
         yield True
     finally:
