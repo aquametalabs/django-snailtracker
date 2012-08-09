@@ -20,7 +20,6 @@ from django.core.mail import send_mail
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 
-from django_snailtracker.exceptions import ParentNotFoundError
 from django_snailtracker.helpers import (make_model_snapshot, dict_diff,
         diff_from_action, mutex_lock, SnailtrackerMutexLockedError)
 from django_snailtracker.constants import (ACTION_TYPE_INSERT,
@@ -41,7 +40,7 @@ class Snailtrack(models.Model):
 
     def __unicode__(self):
         return '%s #%i: %s' % (
-                self.content_object._meta.db_table, self.id or 0, self.object_id)
+                self.content_type.model_class()._meta.db_table, self.id or 0, self.object_id)
 
     @property
     def actions(self):

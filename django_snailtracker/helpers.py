@@ -75,7 +75,8 @@ def mutex_lock(key):
     try:
         yield True
     finally:
-        os.remove(mutex_key)
+        if os.path.exists(mutex_key):
+            os.remove(mutex_key)
 
 
 class SnailtrackerMutexLockedError(Exception):
