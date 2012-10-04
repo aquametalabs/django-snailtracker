@@ -1,13 +1,12 @@
 from django.db import models
-from django_snailtracker.models import Logger
 
 
-class MockTag(models.Model, Logger):
+class MockTag(models.Model):
 
     name = models.CharField(max_length=6)
 
 
-class MockModel(models.Model, Logger):
+class MockModel(models.Model):
 
     name = models.CharField(max_length=6)
     tags = models.ManyToManyField(MockTag)
@@ -15,7 +14,7 @@ class MockModel(models.Model, Logger):
     snailtracker_exclude_fields = ('ignored',)
 
 
-class ChildMockModel(models.Model, Logger):
+class ChildMockModel(models.Model):
 
     name = models.CharField(max_length=6)
     mock_model = models.ForeignKey(MockModel)
