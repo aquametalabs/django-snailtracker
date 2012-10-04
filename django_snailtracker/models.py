@@ -173,26 +173,6 @@ class Story(object):
         self.delete = delete
 
 
-class Logger(object):
-    """
-    Mixin class for snailtracker.
-    Any Django model that inherits from this Mixin will have it's changes
-    logged by Snailtracker.
-
-    class MyDjangoModel(django.db.models.Model, snailtracker.models.Logger):
-        ...
-    """
-
-    @property
-    def snailtrack(self):
-        try:
-            return Snailtrack.objects.get(
-                    table__name=self._meta.db_table,
-                    changed_record_id=self.id)
-        except Snailtrack.DoesNotExist:
-            return None
-
-
 def get_or_create_snailtrack(instance, deleted=False, do_create_action=True):
     try:
         with mutex_lock('%s.%d' % (instance._meta.db_table, instance.id)):
