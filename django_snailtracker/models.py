@@ -264,7 +264,7 @@ def snailtracker_post_save_hook(sender, instance, **kwargs):
         from django_snailtracker.tasks import offload_wrapper, celery_enabled
         if celery_enabled:
             offload_wrapper.delay(instance)
-            logger.info('%s model instanced saved. '
+            logger.debug('%s model instanced saved. '
                     'Offloaded snailtracker task to Celery.' % instance)
         else:
             get_or_create_snailtrack(instance)
