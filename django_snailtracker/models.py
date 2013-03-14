@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 
 from django.utils import simplejson as json
@@ -196,6 +197,7 @@ def get_or_create_snailtrack(instance, deleted=False, do_create_action=True):
             return snailtrack, created
     except SnailtrackerMutexLockedError:
         logger.debug('Attempting to access locked record. Trying again...')
+        time.sleep(1)
         get_or_create_snailtrack(instance=instance, deleted=deleted,
                                  do_create_action=do_create_action)
 
