@@ -189,7 +189,7 @@ def get_or_create_snailtrack(instance, deleted=False, do_create_action=True):
 
             logger.debug('%s Snailtrack(%i) object for table %s' % (
                     ('Created' if created else 'Found'),
-                    snailtrack.id, snailtrack.content_object._meta.db_table))
+                    snailtrack.id, snailtrack.content_type.model_class()._meta.db_table))
 
             if do_create_action:
                 create_action(instance=instance, snailtrack=snailtrack,
