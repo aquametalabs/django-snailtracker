@@ -22,7 +22,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 
 from django_snailtracker.helpers import (make_model_snapshot, dict_diff,
-        diff_from_action, mutex_lock, SnailtrackerMutexLockedError)
+        diff_from_action, mutex_lock, SnailtrackerMutexLockedError,
+        snailtracker_enabled)
 from django_snailtracker.constants import (ACTION_TYPE_INSERT,
         ACTION_TYPE_UPDATE, ACTION_TYPE_DELETE, ACTION_TYPE_CHOICES)
 

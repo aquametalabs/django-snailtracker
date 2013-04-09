@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 #version = __import__('django_snailtracker').__version__
-version = '0.6.5'
+version = '0.6.6'
 
 
 setup(name='django-snailtracker',
