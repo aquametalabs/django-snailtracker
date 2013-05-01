@@ -168,10 +168,12 @@ class Action(models.Model):
 
 class ObjectLock(models.Model):
 
-    key = models.CharField(max_length=32, primary_key=True)
     table = models.CharField(max_length=100)
     object_pk = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('table', 'object_pk')
 
 
 class Story(object):

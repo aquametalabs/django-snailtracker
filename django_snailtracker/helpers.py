@@ -8,6 +8,7 @@ import os
 from django.core import serializers
 from django.conf import settings
 from django.db import models
+from django.db.utils import IntegrityError
 
 
 if not hasattr(settings, 'SERIALIZATION_MODULES'):
@@ -77,10 +78,9 @@ def mutex_lock(model_instance):
     ObjectLock = models.get_model('django_snailtracker', 'ObjectLock')
     table = model_instance._meta.db_table
     pk = model_instance.pk
-    mutex_key = hashlib.md5(
-        '{table}{pk}'.format(table=table, pk=pk)).hexdigest()
+
     try:
-        lock = ObjectLock.objects.get(pk=mutex_key)
+        lock = ObjectLock.objects.get(table=table, object_pk=pk)
         created_at_delta = datetime.now() - lock.created_at
         over_due = created_at_delta.seconds > SNAILTRACKER_TIMEOUT_SECONDS
         if not over_due:
@@ -90,8 +90,12 @@ def mutex_lock(model_instance):
             lock.delete()
             raise OverDueLock
     except (ObjectLock.DoesNotExist, OverDueLock):
-        lock = ObjectLock.objects.create(
-            pk=mutex_key, table=table, object_pk=pk)
+        try:
+            lock = ObjectLock.objects.create(table=table, object_pk=pk)
+        except IntegrityError:
+            raise SnailtrackerMutexLockedError(
+                "{table}:{pk} is already locked".format(table=table, pk=pk))
+
     try:
         yield True
     finally:

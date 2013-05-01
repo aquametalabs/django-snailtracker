@@ -10,15 +10,21 @@ class Migration(SchemaMigration):
     def forwards(self, orm):
         # Adding model 'ObjectLock'
         db.create_table('django_snailtracker_objectlock', (
-            ('key', self.gf('django.db.models.fields.CharField')(max_length=32, primary_key=True)),
+            ('id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
             ('table', self.gf('django.db.models.fields.CharField')(max_length=100)),
             ('object_pk', self.gf('django.db.models.fields.CharField')(max_length=100)),
             ('created_at', self.gf('django.db.models.fields.DateTimeField')(auto_now_add=True, blank=True)),
         ))
         db.send_create_signal('django_snailtracker', ['ObjectLock'])
 
+        # Adding unique constraint on 'ObjectLock', fields ['table', 'object_pk']
+        db.create_unique('django_snailtracker_objectlock', ['table', 'object_pk'])
+
 
     def backwards(self, orm):
+        # Removing unique constraint on 'ObjectLock', fields ['table', 'object_pk']
+        db.delete_unique('django_snailtracker_objectlock', ['table', 'object_pk'])
+
         # Deleting model 'ObjectLock'
         db.delete_table('django_snailtracker_objectlock')
 
@@ -44,9 +50,9 @@ class Migration(SchemaMigration):
             'user_name': ('django.db.models.fields.CharField', [], {'max_length': '255'})
         },
         'django_snailtracker.objectlock': {
-            'Meta': {'object_name': 'ObjectLock'},
+            'Meta': {'unique_together': "(('table', 'object_pk'),)", 'object_name': 'ObjectLock'},
             'created_at': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
-            'key': ('django.db.models.fields.CharField', [], {'max_length': '32', 'primary_key': 'True'}),
+            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'object_pk': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'table': ('django.db.models.fields.CharField', [], {'max_length': '100'})
         },
