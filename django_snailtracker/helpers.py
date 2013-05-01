@@ -1,11 +1,16 @@
 from contextlib import contextmanager
 from datetime import datetime
-from time import time
+import hashlib
+import time
 import json
 import os
 
 from django.core import serializers
 from django.conf import settings
+from django.db import models
+from django.db.utils import IntegrityError
+
+
 if not hasattr(settings, 'SERIALIZATION_MODULES'):
     settings.SERIALIZATION_MODULES = {}
 if 'django_snailtracker.serializer' not in settings.SERIALIZATION_MODULES:
@@ -52,32 +57,46 @@ def diff_from_action(action, values=True):
     if action.post_init_snapshot and action.post_save_snapshot:
         if not values:
             return dict_diff(
-                    action.init_snapshot_to_python()['fields'],
-                    action.save_snapshot_to_python()['fields'])
+                action.init_snapshot_to_python()['fields'],
+                action.save_snapshot_to_python()['fields'])
         else:
             return dict_diff_with_values(
-                    action.init_snapshot_to_python()['fields'],
-                    action.save_snapshot_to_python()['fields'])
-
-
-@contextmanager
-def mutex_lock(key):
-    mutex_key = '%ssnailtracker.%s.lock' % (SNAILTRACKER_TMP_PATH, key)
-    if os.path.exists(mutex_key):
-        with open(mutex_key, 'r') as tmp_f:
-            file_data = tmp_f.read()
-            if file_data:
-                was_made = datetime.fromtimestamp(float(file_data))
-                if (datetime.now() - was_made).seconds < SNAILTRACKER_TIMEOUT_SECONDS:
-                    raise SnailtrackerMutexLockedError("'%s' is already locked" % (key,))
-    with open(mutex_key, 'w') as tmp_f:
-        tmp_f.write(unicode(time()))
-    try:
-        yield True
-    finally:
-        if os.path.exists(mutex_key):
-            os.remove(mutex_key)
+                action.init_snapshot_to_python()['fields'],
+                action.save_snapshot_to_python()['fields'])
 
 
 class SnailtrackerMutexLockedError(Exception):
     pass
+
+
+class OverDueLock(Exception):
+    pass
+
+
+@contextmanager
+def mutex_lock(model_instance):
+    ObjectLock = models.get_model('django_snailtracker', 'ObjectLock')
+    table = model_instance._meta.db_table
+    pk = model_instance.pk
+
+    try:
+        lock = ObjectLock.objects.get(table=table, object_pk=pk)
+        created_at_delta = datetime.now() - lock.created_at
+        over_due = created_at_delta.seconds > SNAILTRACKER_TIMEOUT_SECONDS
+        if not over_due:
+            raise SnailtrackerMutexLockedError(
+                "{table}:{pk} is already locked".format(table=table, pk=pk))
+        else:
+            lock.delete()
+            raise OverDueLock
+    except (ObjectLock.DoesNotExist, OverDueLock):
+        try:
+            lock = ObjectLock.objects.create(table=table, object_pk=pk)
+        except IntegrityError:
+            raise SnailtrackerMutexLockedError(
+                "{table}:{pk} is already locked".format(table=table, pk=pk))
+
+    try:
+        yield True
+    finally:
+        lock.delete()

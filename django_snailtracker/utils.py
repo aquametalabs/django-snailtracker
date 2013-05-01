@@ -3,8 +3,8 @@ import logging
 from django.db.models.signals import post_init, post_save, post_delete
 
 from django_snailtracker.models import (snailtracker_post_init_hook,
-        snailtracker_post_save_hook, snailtracker_post_delete_hook,
-        snailtracker_enabled)
+        snailtracker_post_save_hook, snailtracker_post_delete_hook)
+from django_snailtracker.helpers import snailtracker_enabled
 from django_snailtracker.sites import snailtracker_site
 
 

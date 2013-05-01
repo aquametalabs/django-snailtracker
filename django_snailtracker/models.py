@@ -22,8 +22,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 
 from django_snailtracker.helpers import (make_model_snapshot, dict_diff,
-        diff_from_action, mutex_lock, SnailtrackerMutexLockedError,
-        snailtracker_enabled)
+        diff_from_action, mutex_lock, SnailtrackerMutexLockedError)
 from django_snailtracker.constants import (ACTION_TYPE_INSERT,
         ACTION_TYPE_UPDATE, ACTION_TYPE_DELETE, ACTION_TYPE_CHOICES)
 
@@ -167,6 +166,16 @@ class Action(models.Model):
             return diff_from_action(self, values=values)
 
 
+class ObjectLock(models.Model):
+
+    table = models.CharField(max_length=100)
+    object_pk = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('table', 'object_pk')
+
+
 class Story(object):
 
     def __init__(self, insert=None, update=None, delete=None):
@@ -177,7 +186,7 @@ class Story(object):
 
 def get_or_create_snailtrack(instance, deleted=False, do_create_action=True):
     try:
-        with mutex_lock('%s.%d' % (instance._meta.db_table, instance.id)):
+        with mutex_lock(instance):
             parent = None
             if hasattr(instance, 'snailtracker_child_of'):
                 parent, created = get_or_create_snailtrack(
