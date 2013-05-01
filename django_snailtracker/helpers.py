@@ -96,5 +96,3 @@ def mutex_lock(model_instance):
         yield True
     finally:
         lock.delete()
-        if os.path.exists(mutex_key):
-            os.remove(mutex_key)
