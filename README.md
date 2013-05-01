@@ -51,7 +51,7 @@ Then migrate if you use South:
 
 Registering models to be tracked by Snailtracker is a lot like registering
 models to be used in the Django Admin. Start by creating a `snailtracker.py`
-files in each app where you have models that you want to track.
+file in each app where you have models that you want to track.
 
 The `snailtracker.py` file for a blog app would look like this:
 
