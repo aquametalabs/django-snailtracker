@@ -97,6 +97,7 @@ def mutex_lock(model_instance):
             lock = ObjectLock.objects.create(table=table, object_pk=pk)
             transaction.commit()
         except IntegrityError:
+            transaction.rollback()
             raise SnailtrackerMutexLockedError(
                 "{table}:{pk} is already locked".format(table=table, pk=pk))
     except DatabaseError:
