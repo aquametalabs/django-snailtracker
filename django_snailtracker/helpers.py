@@ -87,7 +87,7 @@ def mutex_lock(model_instance):
         over_due = created_at_delta.seconds > SNAILTRACKER_TIMEOUT_SECONDS
         if not over_due:
             raise SnailtrackerMutexLockedError(
-                "{table}:{pk} is already locked".format(table=table, pk=pk))
+                "{table}:{pk} is already locked. Lock not expired.".format(table=table, pk=pk))
         else:
             lock.delete()
             transaction.commit()
@@ -99,11 +99,11 @@ def mutex_lock(model_instance):
         except IntegrityError:
             transaction.rollback()
             raise SnailtrackerMutexLockedError(
-                "{table}:{pk} is already locked".format(table=table, pk=pk))
+                "{table}:{pk} is already locked. IntegrityError on insert.".format(table=table, pk=pk))
     except DatabaseError:
         transaction.rollback()
         raise SnailtrackerMutexLockedError(
-            "{table}:{pk} is already locked".format(table=table, pk=pk))
+            "{table}:{pk} is already locked. Database error.".format(table=table, pk=pk))
 
     try:
         yield True

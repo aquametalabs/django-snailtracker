@@ -205,8 +205,8 @@ def get_or_create_snailtrack(instance, deleted=False, do_create_action=True):
                 create_action(instance=instance, snailtrack=snailtrack,
                               deleted=deleted)
             return snailtrack, created
-    except SnailtrackerMutexLockedError:
-        logger.debug('Attempting to access locked record. Trying again...')
+    except SnailtrackerMutexLockedError, e:
+        logger.debug('Attempting to access locked record. Message: {0} Trying again...'.format(e))
         time.sleep(.250)
         return get_or_create_snailtrack(instance=instance, deleted=deleted,
                                  do_create_action=do_create_action)
