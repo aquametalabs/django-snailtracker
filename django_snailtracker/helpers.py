@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from datetime import datetime
+from django.db import transaction, DatabaseError
 import hashlib
 import time
 import json
@@ -73,6 +74,7 @@ class OverDueLock(Exception):
     pass
 
 
+@transaction.commit_manually
 @contextmanager
 def mutex_lock(model_instance):
     ObjectLock = models.get_model('django_snailtracker', 'ObjectLock')
@@ -88,15 +90,22 @@ def mutex_lock(model_instance):
                 "{table}:{pk} is already locked".format(table=table, pk=pk))
         else:
             lock.delete()
+            transaction.commit()
             raise OverDueLock
     except (ObjectLock.DoesNotExist, OverDueLock):
         try:
             lock = ObjectLock.objects.create(table=table, object_pk=pk)
+            transaction.commit()
         except IntegrityError:
             raise SnailtrackerMutexLockedError(
                 "{table}:{pk} is already locked".format(table=table, pk=pk))
+    except DatabaseError:
+        transaction.rollback()
+        raise SnailtrackerMutexLockedError(
+            "{table}:{pk} is already locked".format(table=table, pk=pk))
 
     try:
         yield True
     finally:
         lock.delete()
+        transaction.commit()
