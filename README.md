@@ -63,3 +63,10 @@ The `snailtracker.py` file for a blog app would look like this:
     django_snailtracker.utils.register(Post)
     django_snailtracker.utils.register(Tag)
     django_snailtracker.utils.register(Comment)
+
+You'll also have to tell django to go find the files. Snailtracker has an `autodiscover()`
+utility to do this. Typically this will be in your main `urls.py` file:
+
+    from django_snailtracker import autodiscover
+    
+    autodiscover()
